@@ -37,12 +37,18 @@ class Cell:
         step_input = tf.concat(values=[self.previous_activation, self.input_tensor], axis=0)
         forget_gate = tf.sigmoid(tf.matmul(self.w_forget_gate, step_input) + self.b_forget_gate)
         update_gate = tf.sigmoid(tf.matmul(self.w_update_gate, step_input) + self.b_update_gate)
-        output_gate = tf.tanh(tf.matmul(self.w_output_gate, step_input) + self.b_output_gate)
-        assert forget_gate.get_shape() == self.previous_memory.get_shape() and update_gate.get_shape() == self.previous_memory.get_shape()
+        update = tf.tanh(tf.matmul(self.w_output_gate, step_input) + self.b_output_gate)
+        output_gate = tf.sigmoid(tf.matmul(self.w_output_gate, step_input) + self.b_output_gate)
+        self.previous_memory = tf.multiply(forget_gate, self.previous_memory) + tf.multiply(update_gate, update)
+        self.previous_activation = tf.multiply(output_gate, tf.tanh(self.previous_memory))
+
+        pred = tf.nn.softmax(tf.matmul(self.w_output, self.previous_activation) + self.b_output)
+        return pred
 
 
 if __name__ == "__main__":
     lstm = LSTM()
     tensor = tf.get_variable('input', shape=[27, 100])
     cell = Cell(512, tensor, 27)
-    cell.step()
+    pred = cell.step()
+    print(pred, pred.get_shape())
