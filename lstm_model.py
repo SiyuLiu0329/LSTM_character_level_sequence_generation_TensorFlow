@@ -1,5 +1,4 @@
 import tensorflow as tf
-from lstm_utils import *
 
 class LSTM:
     def __init__(self):
@@ -11,8 +10,7 @@ class LSTM:
 
 class Cell:
     def __init__(self, n_hidden, input_tensor, n_output):
-        n_input, batch_size = input_tensor.get_shape().as_list()
-        print("Cell input tensor shape: (", n_input, ",", batch_size, ")")
+        n_input, batch_size, n_time_steps = input_tensor.get_shape().as_list()
 
         initialiser = tf.contrib.layers.xavier_initializer()
 
@@ -32,9 +30,15 @@ class Cell:
         self.previous_memory = tf.get_variable('previous_memory', shape=[n_hidden, batch_size], initializer=tf.zeros_initializer())
 
         self.input_tensor = input_tensor
+        self.n_input = n_input
+        self.batch_size = batch_size
+        self.n_time_steps = n_time_steps
+        self.t = 0
 
     def step(self):
-        step_input = tf.concat(values=[self.previous_activation, self.input_tensor], axis=0)
+        x_t = tf.slice(self.input_tensor, [0, 0, self.t], [self.n_input, self.batch_size, 1])
+        x_t = tf.reshape(x_t, [self.n_input, self.batch_size])
+        step_input = tf.concat(values=[self.previous_activation, x_t], axis=0)
         forget_gate = tf.sigmoid(tf.matmul(self.w_forget_gate, step_input) + self.b_forget_gate)
         update_gate = tf.sigmoid(tf.matmul(self.w_update_gate, step_input) + self.b_update_gate)
         update = tf.tanh(tf.matmul(self.w_output_gate, step_input) + self.b_output_gate)
@@ -43,12 +47,14 @@ class Cell:
         self.previous_activation = tf.multiply(output_gate, tf.tanh(self.previous_memory))
 
         pred = tf.nn.softmax(tf.matmul(self.w_output, self.previous_activation) + self.b_output)
+        self.t += 1
         return pred
+        
 
 
 if __name__ == "__main__":
     lstm = LSTM()
-    tensor = tf.get_variable('input', shape=[27, 100])
+    tensor = tf.get_variable('input', shape=[27, 100, 60])
     cell = Cell(512, tensor, 27)
     pred = cell.step()
     print(pred, pred.get_shape())
