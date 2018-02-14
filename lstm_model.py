@@ -8,12 +8,6 @@ class LSTM:
     def add_layer(self, n_units):
         pass
 
-    def step(self):
-        pass
-
-    def run(self, n_iter):
-        pass
-
 
 class Cell:
     def __init__(self, n_hidden, input_tensor, n_output):
