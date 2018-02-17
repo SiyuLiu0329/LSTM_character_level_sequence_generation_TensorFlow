@@ -1,61 +1,107 @@
 import tensorflow as tf
 import random
 import string
-
+import numpy as np
 
 class Cell:
-    def __init__(self, n_hidden, input_tensor, n_output):
-        self.n_input, self.batch_size, self.n_time_steps = input_tensor.get_shape().as_list()
+    def __init__(self, n_units, n_output, input_tensor):
+        n_time_steps, batch_size, n_input = input_tensor.get_shape()
+        self._w = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
+        self._b = tf.Variable(np.random.randn(1, n_units)) 
 
-        initialiser = tf.contrib.layers.xavier_initializer()
-        cell_id = self._generate_cell_id()
-        self.n_output = n_output
+        self._state = tf.constant(np.zeros((batch_size, n_units)), dtype=tf.float64)
+        self._input_tensor = input_tensor
 
-        self.w_forget_gate = tf.get_variable('w_forget_gate_' + cell_id, shape=[n_hidden, n_hidden + self.n_input], initializer=initialiser)
-        self.w_update_gate = tf.get_variable('w_update_gate_' + cell_id, shape=[n_hidden, n_hidden + self.n_input], initializer=initialiser)
-        self.w_output_gate = tf.get_variable('w_output_gate_' + cell_id, shape=[n_hidden, n_hidden + self.n_input], initializer=initialiser)
-        self.w_input = tf.get_variable('w_input_' + cell_id, shape=[n_hidden, n_hidden + self.n_input], initializer=initialiser)
+        self._w_out = tf.Variable(np.random.randn(n_units, n_output), dtype=tf.float64)
+        self._b_out = tf.Variable(np.random.randn(1, n_output), dtype=tf.float64)
 
-        self.b_forget_gate = tf.get_variable('b_forget_gate_' + cell_id, shape=[n_hidden, 1], initializer=tf.zeros_initializer())
-        self.b_update_gate = tf.get_variable('b_update_gate_' + cell_id, shape=[n_hidden, 1], initializer=tf.zeros_initializer())
-        self.b_output_gate = tf.get_variable('b_output_gate_' + cell_id, shape=[n_hidden, 1], initializer=tf.zeros_initializer())
-        self.b_input = tf.get_variable('b_input_' + cell_id, shape=[n_hidden, 1], initializer=tf.zeros_initializer())
+        self._t = 0
 
-        self.b_output = tf.get_variable('b_output_' + cell_id, shape=[n_output, 1], initializer=tf.zeros_initializer())
-        self.w_output = tf.get_variable('w_output_' + cell_id, shape=[n_output, n_hidden], initializer=initialiser)
+    def forward_pass(self):
+        current_input = self._input_tensor[self._t]
+        current_input = tf.concat([self._state, current_input], axis=1)
+        self._state = tf.tanh(tf.matmul(current_input, self._w) + self._b)    
+        logits = tf.matmul(self._state, self._w_out)
+        pred = tf.nn.softmax(logits)
+        self._t += 1
+        return pred, logits
 
-        self.previous_activation = tf.get_variable('previous_activation_' + cell_id, shape=[n_hidden, self.batch_size], initializer=tf.zeros_initializer())
-        self.previous_memory = tf.get_variable('previous_memory_' + cell_id, shape=[n_hidden, self.batch_size], initializer=tf.zeros_initializer())
-
-        self.input_tensor = input_tensor
-        self.t = 0
-
-    def _generate_cell_id(self): 
-        return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
-
-    def step(self):
-        assert self.t <= self.n_time_steps - 1
-        x_t = tf.slice(self.input_tensor, [0, 0, self.t], [self.n_input, self.batch_size, 1])
-        x_t = tf.reshape(x_t, [self.n_input, self.batch_size])
-
-        step_input = tf.concat(values=[self.previous_activation, x_t], axis=0)
-        forget_gate = tf.sigmoid(tf.matmul(self.w_forget_gate, step_input) + self.b_forget_gate)
-        update_gate = tf.sigmoid(tf.matmul(self.w_update_gate, step_input) + self.b_update_gate)
-        update = tf.tanh(tf.matmul(self.w_output_gate, step_input) + self.b_output_gate)
-        output_gate = tf.sigmoid(tf.matmul(self.w_output_gate, step_input) + self.b_output_gate)
-        self.previous_memory = tf.multiply(forget_gate, self.previous_memory) + tf.multiply(update_gate, update)
-        self.previous_activation = tf.multiply(output_gate, tf.tanh(self.previous_memory))
-        self.t += 1
-
-        output = tf.nn.softmax(tf.matmul(self.w_output, self.previous_activation) + self.b_output)
-        return output
+    def generate_sequence(self):
+        pass
 
 
 
-if __name__ == "__main__":
-    lstm = LSTM()
-    tensor = tf.get_variable('input', shape=[27, 100, 60])
-    cell = Cell(512, tensor, 27)
-    print(cell.step())
-    print(cell.step())
-    print(cell.step())
+def read_file(path):
+    fd = open(path, 'r')
+    data = fd.read()
+    return data
+
+def process_text(data):
+    data = data.lower()
+    chars = list(set(data))
+    lines = data.split()
+    np.random.seed(1)
+    np.random.shuffle(lines)
+    char_to_ix = { ch:i for i,ch in enumerate(sorted(chars)) }
+    ix_to_char = { i:ch for i,ch in enumerate(sorted(chars)) }
+    max_len = 0
+    for line in lines:
+        if len(line) > max_len:
+            max_len = len(line)
+    n_time_steps = max_len + 2 # 1 for the None character at the start the other for the '\n' character at the end
+
+    x_train = np.zeros((n_time_steps, len(lines), len(chars))) 
+    y_train = np.zeros((n_time_steps, len(lines), len(chars))) 
+
+    for i in range(len(lines)):
+        for j in range(len(lines[i])):
+            idx = char_to_ix[lines[i][j]]
+            y_train[j][i][idx] = 1
+            x_train[j + 1][i][idx] = 1
+        y_train[j + 1][i][0] = 1
+        x_train[j + 2][i][0] = 1
+
+    assert ix_to_char[np.argmax(x_train[3 + 1][0])] == ix_to_char[np.argmax(y_train[3][0])]
+    return x_train, y_train
+
+
+def to_batches(data, batch_size):
+    batches = []
+    for i in range(1536):
+        batches.append(data[:, i, :].reshape((28, 1, 27)))
+    return batches
+    
+
+if __name__ ==  '__main__':
+    data = read_file('txt/dinos.txt')
+    x_train, y_train = process_text(data)
+    x_batches, y_batches = to_batches(x_train, 1), to_batches(y_train, 1)
+
+    input_tensor = tf.placeholder(tf.float64, shape=[28, 1, 27])
+    # input_tensor = tf.constant([[[1,2,3,4,5], [6,7,8,9,10]], [[1.1,2,3,4,5], [6,7,8,9,10]]], shape=[2, 2, 5], dtype=tf.float64)
+    cell = Cell(512, 27, input_tensor)
+
+    losses = []
+    labels = tf.placeholder(tf.float64, [28, 1, 27])
+    for i in range(28):
+        pred, logits = cell.forward_pass()
+        label = labels[i, :, :]
+        losses.append(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=label))
+
+    global_step = tf.Variable(0, trainable=False)
+    starter_learning_rate = 0.01
+    learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+                                       2000, 0.96, staircase=True)
+    total_loss = tf.reduce_mean(losses)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+    gradients, variables = zip(*optimizer.compute_gradients(total_loss))
+    gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+    optimize = optimizer.apply_gradients(zip(gradients, variables), global_step=global_step)
+
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        for i in range(50000):
+            idx = i % 1536
+            sess.run(optimize, feed_dict={input_tensor: x_batches[idx], labels: y_batches[idx]})
+            if i % 100 == 0:
+                print(sess.run(total_loss, feed_dict={input_tensor: x_batches[idx], labels: y_batches[idx]}))
