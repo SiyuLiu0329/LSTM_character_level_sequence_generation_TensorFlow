@@ -8,14 +8,22 @@ RNN_SIZE = 256
 class Cell:
     def __init__(self, n_units, n_output, input_tensor):
         _, batch_size, n_input = input_tensor.get_shape()
-        self._w = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
-        self._b = tf.Variable(np.random.randn(1, n_units)) 
+        self._w_forget_gete = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
+        self._w_update_gate = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
+        self._w_tanh = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
+        self._w_output_gate = tf.Variable(np.random.rand(n_input + n_units, n_units), dtype=tf.float64)
+        self._w_out = tf.Variable(np.random.randn(n_units, n_output), dtype=tf.float64)
+
+        self._b_forget_gate = tf.Variable(np.random.randn(1, n_units), dtype=tf.float64)
+        self._b_update_gate = tf.Variable(np.random.randn(1, n_units), dtype=tf.float64)
+        self._b_tanh = tf.Variable(np.random.randn(1, n_units), dtype=tf.float64) 
+        self._b_output_gate = tf.Variable(np.random.randn(1, n_units), dtype=tf.float64)
+        self._b_out = tf.Variable(np.random.randn(1, n_output), dtype=tf.float64)
 
         self._state = tf.constant(np.zeros((batch_size, n_units)), dtype=tf.float64)
+        self._c = tf.constant(np.zeros((batch_size, n_units)), dtype=tf.float64)
         self._input_tensor = input_tensor
-
-        self._w_out = tf.Variable(np.random.randn(n_units, n_output), dtype=tf.float64)
-        self._b_out = tf.Variable(np.random.randn(1, n_output), dtype=tf.float64)
+        
 
         self._t = 0
 
@@ -23,14 +31,31 @@ class Cell:
         # change to lstm later
         current_input = self._input_tensor[self._t]
         current_input = tf.concat([self._state, current_input], axis=1)
-        self._state = tf.tanh(tf.matmul(current_input, self._w) + self._b)    
+        forget_gate = tf.sigmoid(tf.matmul(current_input, self._w_forget_gete) + self._b_forget_gate)
+        update_gate = tf.sigmoid(tf.matmul(current_input, self._w_update_gate) + self._b_update_gate)
+        tanh = tf.tanh(tf.matmul(current_input, self._w_tanh) + self._b_tanh)
+        self._c = tf.multiply(forget_gate, self._c) + tf.multiply(update_gate, tanh)
+        output_gate = tf.sigmoid(tf.matmul(current_input, self._w_output_gate) + self._b_output_gate)
+        self._state = tf.multiply(output_gate, tf.tanh(self._c))
+
         logits = tf.matmul(self._state, self._w_out) + self._b_out
         pred = tf.nn.softmax(logits)
         self._t += 1
         return pred, logits
 
     def get_weights(self):
-        return self._w, self._b, self._w_out, self._b_out
+        return (
+                self._w_forget_gete, 
+                self._w_update_gate,
+                self._w_tanh,
+                self._w_output_gate,
+                self._w_out,
+                self._b_forget_gate,
+                self._b_update_gate,
+                self._b_tanh,
+                self._b_output_gate,
+                self._b_out
+               )
 
 
 def read_file(path):
@@ -72,17 +97,32 @@ def prepare_training_set(data, num_chars=27):
         batches.append(data[:, i, :].reshape((-1, 1, num_chars)))
     return batches
 
-def generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 30, num_chars=27):
+def sigmoid(x):
+  return 1 / (1 + np.exp(-x))
+
+def generate_sequence(weights, ix_to_char, max_len = 30, num_chars=27):
+    (
+        w_forget, w_update, w_tanh, w_output, w_out,
+        b_forget, b_update, b_tanh, b_output, b_out,       
+    ) = weights
+
     state = np.zeros((1, RNN_SIZE))
+    c = np.zeros((1, RNN_SIZE))
     current_input = np.zeros((1, num_chars))
     seq = []
     idx = -1
     while len(seq) <= max_len:
 
         current_input = np.concatenate((state, current_input), axis=1)
-        state = np.tanh(np.dot(current_input, w) + b)
+        forget_gate = sigmoid(np.dot(current_input, w_forget) + b_forget)
+        update_gate = sigmoid(np.dot(current_input, w_update) + b_update)
+        tanh = np.tanh(np.dot(current_input, w_tanh) + b_tanh)
+        c = np.multiply(forget_gate, c) + np.multiply(update_gate, tanh)
+        output_gate = sigmoid(np.dot(current_input, w_output) + b_output)
+        state = np.multiply(output_gate, np.tanh(c))
         logits = np.dot(state, w_out) + b_out
         pred = softmax(logits)
+
         idx = np.random.choice([i for i in range(len(ix_to_char))], p = pred.ravel())
         if idx == 0:
             break
@@ -137,9 +177,6 @@ if __name__ ==  '__main__':
             if i % 500 == 0:
                 print('\niter=' + str(i))
                 print(sess.run(total_loss, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]}))
-                w, b, w_out, b_out = cell.get_weights()
-                w, b, w_out, b_out = sess.run([w, b, w_out, b_out])
-                generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 26, num_chars=num_chars)
-                generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 26, num_chars=num_chars)
-                generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 26, num_chars=num_chars)
+                weights = cell.get_weights()
+                generate_sequence(sess.run(weights), ix_to_char, max_len = 26, num_chars=num_chars)
             i += 1
