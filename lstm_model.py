@@ -59,7 +59,7 @@ class Cell:
 
 
 def read_file(path):
-    fd = open(path, 'r')
+    fd = open(path, 'r', encoding='utf-8')
     data = fd.read()
     return data
 
@@ -86,7 +86,6 @@ def process_text(data):
             x_train[j + 1][i][idx] = 1
         y_train[j + 1][i][0] = 1
         x_train[j + 2][i][0] = 1
-
     assert ix_to_char[np.argmax(x_train[3 + 1][0])] == ix_to_char[np.argmax(y_train[3][0])]
     return x_train, y_train, char_to_ix, ix_to_char
 
@@ -141,7 +140,7 @@ def softmax(x):
 def build_model(cell, labels, n_time_steps=28, lr= 0.002):
     losses = []
     for i in range(n_time_steps):
-        pred, logits = cell.forward_pass()
+        _, logits = cell.forward_pass()
         label = labels[i, :, :]
         losses.append(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=label))
 
@@ -157,26 +156,32 @@ def build_model(cell, labels, n_time_steps=28, lr= 0.002):
     return optimise, total_loss
 
 if __name__ ==  '__main__':
-    data = read_file('txt/dinos.txt')
-    x_train, y_train, char_to_ix, ix_to_char = process_text(data)
-    num_chars = len(ix_to_char)
-    x_train = prepare_training_set(x_train, num_chars=num_chars)
-    y_train = prepare_training_set(y_train, num_chars=num_chars)
-
+    data = read_file('txt/names.txt')
+    x, y, char_to_ix, ix_to_char = process_text(data)
+    len_max, _, num_chars = x.shape
+    x_train = prepare_training_set(x, num_chars=num_chars)
+    y_train = prepare_training_set(y, num_chars=num_chars)
     input_tensor = tf.placeholder(tf.float64, shape=[None, 1, num_chars])
-    cell = Cell(RNN_SIZE, 27, input_tensor)
+    cell = Cell(RNN_SIZE, num_chars, input_tensor)
     labels = tf.placeholder(tf.float64, [None, 1, len(ix_to_char)])
-    optimise_opt, total_loss = build_model(cell, labels)
+    optimise_opt, total_loss = build_model(cell, labels, n_time_steps=len_max)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         i = 0
         while True:
+
+            
             idx = i % 1536
             sess.run(optimise_opt, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]})
             if i % 500 == 0:
-                print('\niter=' + str(i))
+                print('\niter=' + str(i * 500))
                 print(sess.run(total_loss, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]}))
                 weights = cell.get_weights()
-                generate_sequence(sess.run(weights), ix_to_char, max_len = 26, num_chars=num_chars)
+                weights = sess.run(weights)
+                generate_sequence(weights, ix_to_char, max_len = len_max, num_chars=num_chars)
+                generate_sequence(weights, ix_to_char, max_len = len_max, num_chars=num_chars)
+                generate_sequence(weights, ix_to_char, max_len = len_max, num_chars=num_chars)
+                generate_sequence(weights, ix_to_char, max_len = len_max, num_chars=num_chars)
+                generate_sequence(weights, ix_to_char, max_len = len_max, num_chars=num_chars)
             i += 1
