@@ -156,9 +156,9 @@ def build_model(cell, labels, n_time_steps=28, lr= 0.002):
     return optimise, total_loss
 
 if __name__ ==  '__main__':
-    data = read_file('txt/names.txt')
+    data = read_file('txt/dinos.txt')
     x, y, char_to_ix, ix_to_char = process_text(data)
-    len_max, _, num_chars = x.shape
+    len_max, size, num_chars = x.shape
     x_train = prepare_training_set(x, num_chars=num_chars)
     y_train = prepare_training_set(y, num_chars=num_chars)
     input_tensor = tf.placeholder(tf.float64, shape=[None, 1, num_chars])
@@ -172,10 +172,10 @@ if __name__ ==  '__main__':
         while True:
 
             
-            idx = i % 1536
+            idx = i % size
             sess.run(optimise_opt, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]})
             if i % 500 == 0:
-                print('\niter=' + str(i * 500))
+                print('\niter=' + str(i))
                 print(sess.run(total_loss, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]}))
                 weights = cell.get_weights()
                 weights = sess.run(weights)
