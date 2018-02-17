@@ -3,7 +3,7 @@ import random
 import string
 import numpy as np
 
-RNN_SIZE = 512
+RNN_SIZE = 256
 
 class Cell:
     def __init__(self, n_units, n_output, input_tensor):
@@ -31,7 +31,6 @@ class Cell:
 
     def get_weights(self):
         return self._w, self._b, self._w_out, self._b_out
-
 
 
 def read_file(path):
@@ -79,13 +78,14 @@ def generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 30, num_chars=27
     seq = []
     idx = -1
     while len(seq) <= max_len:
-        if idx == 0:
-            break
+
         current_input = np.concatenate((state, current_input), axis=1)
         state = np.tanh(np.dot(current_input, w) + b)
         logits = np.dot(state, w_out) + b_out
         pred = softmax(logits)
         idx = np.random.choice([i for i in range(len(ix_to_char))], p = pred.ravel())
+        if idx == 0:
+            break
         current_input = np.zeros((1, len(ix_to_char)))
         current_input[0][idx] = 1
         seq.append(idx)
@@ -134,10 +134,12 @@ if __name__ ==  '__main__':
         while True:
             idx = i % 1536
             sess.run(optimise_opt, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]})
-            if i % 100 == 0:
-                print('iter=' + str(i))
+            if i % 500 == 0:
+                print('\niter=' + str(i))
                 print(sess.run(total_loss, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]}))
                 w, b, w_out, b_out = cell.get_weights()
                 w, b, w_out, b_out = sess.run([w, b, w_out, b_out])
+                generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 26, num_chars=num_chars)
+                generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 26, num_chars=num_chars)
                 generate_sequence(w, b, w_out, b_out, ix_to_char, max_len = 26, num_chars=num_chars)
             i += 1
