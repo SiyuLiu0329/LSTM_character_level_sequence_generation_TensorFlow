@@ -3,10 +3,37 @@ import random
 import string
 import numpy as np
 
-RNN_SIZE = 256
+RNN_SIZE = 64
 
 class Cell:
+    """A single LSTM cell with pre-initialised weights and biases
+
+     Attributes:
+        self._w_forget_gete: weights applied to the forget gate
+        self._w_update_gate: weights applied the update gate
+        self._w_tanh: weights applied the first tanh function
+        self._w_output_gate: weights applied to the output gate
+        self._w_out: weights applied to the softmax output function
+
+        self._b_forget_gete: biases applied to the forget gate
+        self._b_update_gate: biases applied the update gate
+        self._b_tanh: biases applied the first tanh function
+        self._b_output_gate: biases applied to the output gate
+        self._b_out: biases applied to the softmax output function
+
+        self._state: activation from the previous step
+        self._c:  memory from the previous step
+        self._input_tensor: a reference to the input tensor
+
+    """
     def __init__(self, n_units, n_output, input_tensor):
+        """inits cell
+
+        Args:
+            n_units (int): size of the hidden states
+            n_output (int): size of the output of the cell
+            input_tensor (obj: `Tensor`): input to the cell
+        """
         _, batch_size, n_input = input_tensor.get_shape()
         self._w_forget_gete = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
         self._w_update_gate = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
@@ -28,7 +55,6 @@ class Cell:
         self._t = 0
 
     def forward_pass(self):
-        # change to lstm later
         current_input = self._input_tensor[self._t]
         current_input = tf.concat([self._state, current_input], axis=1)
         forget_gate = tf.sigmoid(tf.matmul(current_input, self._w_forget_gete) + self._b_forget_gate)
@@ -86,7 +112,7 @@ def process_text(data):
             x_train[j + 1][i][idx] = 1
         y_train[j + 1][i][0] = 1
         x_train[j + 2][i][0] = 1
-    assert ix_to_char[np.argmax(x_train[3 + 1][0])] == ix_to_char[np.argmax(y_train[3][0])]
+    assert np.argmax(x_train[3 + 1][0]) == np.argmax(y_train[3][0])
     return x_train, y_train, char_to_ix, ix_to_char
 
 
@@ -156,7 +182,7 @@ def build_model(cell, labels, n_time_steps=28, lr= 0.002):
     return optimise, total_loss
 
 if __name__ ==  '__main__':
-    data = read_file('txt/dinos.txt')
+    data = read_file('txt/drugs.txt')
     x, y, char_to_ix, ix_to_char = process_text(data)
     len_max, size, num_chars = x.shape
     x_train = prepare_training_set(x, num_chars=num_chars)
@@ -170,8 +196,6 @@ if __name__ ==  '__main__':
         sess.run(tf.global_variables_initializer())
         i = 0
         while True:
-
-            
             idx = i % size
             sess.run(optimise_opt, feed_dict={input_tensor: x_train[idx], labels: y_train[idx]})
             if i % 500 == 0:
