@@ -6,33 +6,33 @@ import numpy as np
 RNN_SIZE = 64
 
 class Cell:
-    """A single LSTM cell with pre-initialised weights and biases
+    """A single LSTM cell with pre-initialised weights and biases.
 
      Attributes:
-        self._w_forget_gete: weights applied to the forget gate
-        self._w_update_gate: weights applied the update gate
-        self._w_tanh: weights applied the first tanh function
-        self._w_output_gate: weights applied to the output gate
-        self._w_out: weights applied to the softmax output function
+        self._w_forget_gete: weights applied to the forget gate.
+        self._w_update_gate: weights applied the update gate.
+        self._w_tanh: weights applied the first tanh function.
+        self._w_output_gate: weights applied to the output gate.
+        self._w_out: weights applied to the softmax output function.
 
-        self._b_forget_gete: biases applied to the forget gate
-        self._b_update_gate: biases applied the update gate
-        self._b_tanh: biases applied the first tanh function
-        self._b_output_gate: biases applied to the output gate
-        self._b_out: biases applied to the softmax output function
+        self._b_forget_gete: biases applied to the forget gate.
+        self._b_update_gate: biases applied the update gate.
+        self._b_tanh: biases applied the first tanh function.
+        self._b_output_gate: biases applied to the output gate.
+        self._b_out: biases applied to the softmax output function.
 
-        self._state: activation from the previous step
-        self._c:  memory from the previous step
-        self._input_tensor: a reference to the input tensor
+        self._state: activation from the previous step.
+        self._c:  memory from the previous step.
+        self._input_tensor: a reference to the input tensor.
 
     """
     def __init__(self, n_units, n_output, input_tensor):
-        """inits cell
+        """Inits cell
 
         Args:
-            n_units (int): size of the hidden states
-            n_output (int): size of the output of the cell
-            input_tensor (obj: `Tensor`): input to the cell
+            n_units (int): size of the hidden states.
+            n_output (int): size of the output of the cell.
+            input_tensor (obj: `Tensor`): input to the cell.
         """
         _, batch_size, n_input = input_tensor.get_shape()
         self._w_forget_gete = tf.Variable(np.random.randn(n_input + n_units, n_units), dtype=tf.float64)
@@ -55,6 +55,12 @@ class Cell:
         self._t = 0
 
     def forward_pass(self):
+        """Forward pass.
+        Perform a forward pass and update the stored states.
+        Returns:
+            pred (obj `Tensor`): the output tensor of this forward pass.
+            logits (obj `Tensor`): logits used by the softmax function (later used to compute loss).
+        """
         current_input = self._input_tensor[self._t]
         current_input = tf.concat([self._state, current_input], axis=1)
         forget_gate = tf.sigmoid(tf.matmul(current_input, self._w_forget_gete) + self._b_forget_gate)
@@ -70,6 +76,20 @@ class Cell:
         return pred, logits
 
     def get_weights(self):
+        """Get all weights and biases in the cell.
+        Returns:
+            elf._w_forget_gete: weights applied to the forget gate.
+            self._w_update_gate: weights applied the update gate.
+            self._w_tanh: weights applied the first tanh function.
+            self._w_output_gate: weights applied to the output gate.
+            self._w_out: weights applied to the softmax output function.
+
+            self._b_forget_gete: biases applied to the forget gate.
+            self._b_update_gate: biases applied the update gate.
+            self._b_tanh: biases applied the first tanh function.
+            self._b_output_gate: biases applied to the output gate.
+            self._b_out: biases applied to the softmax output function.
+        """
         return (
                 self._w_forget_gete, 
                 self._w_update_gate,
@@ -85,11 +105,30 @@ class Cell:
 
 
 def read_file(path):
+    """Opens a file and return the content of the file.
+    Args:
+        path (str): path of the file.
+    Returns:
+        data (str): content of the file.
+    """
     fd = open(path, 'r', encoding='utf-8')
     data = fd.read()
     return data
 
 def process_text(data):
+    """Pre-processes read data
+    Split up data into words and convert them into one hot vectors of the same size, 
+    which will be used to construct the x(inputs) and y(labels).
+
+    Args:
+        data (str): data read from a file.
+
+    Returns:
+        x_train: training set x.
+        y_train: training set y.
+        char_to_ix (obj: `dict`): dictionary mapping from characters to indices.
+        ix_to_char (obj: `dict`): dictionary mapping from indices to characters.
+    """
     data = data.lower()
     chars = list(set(data))
     lines = data.split()
@@ -117,15 +156,32 @@ def process_text(data):
 
 
 def prepare_training_set(data, num_chars=27):
+    """(Not finished) Divide the data set into small batches
+    Args: 
+        data: a numpy array of data
+        num_chars (int): number of unique characters appears in the text file
+    Returns:
+        a numpy array of batches of data
+        (Not finished, currently only supports stochastic gradient descent)
+    """
     batches = []
     for i in range(len(data[0])):
         batches.append(data[:, i, :].reshape((-1, 1, num_chars)))
     return batches
 
-def sigmoid(x):
+def sigmoid(x):    
   return 1 / (1 + np.exp(-x))
 
 def generate_sequence(weights, ix_to_char, max_len = 30, num_chars=27):
+    """Generates a new word
+    Takes the nerual network's weights and biases as inputs to generate new sequences. If a new line character appears
+    the model will stop generating and prints the sequence generated.
+    Args:
+        weights: list of weights and biases extracted from the lstm model
+        ix_to_char (obj: `dict`): a dictionary mapping from indices to characters
+        max_len (int): maximum sequence length
+        num_chars (int): number of unique characters in the text file
+    """
     (
         w_forget, w_update, w_tanh, w_output, w_out,
         b_forget, b_update, b_tanh, b_output, b_out,       
@@ -159,11 +215,20 @@ def generate_sequence(weights, ix_to_char, max_len = 30, num_chars=27):
     print(''.join(seq))
 
 def softmax(x):
+    """Simple softmax function
+    """
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum()
 
 
 def build_model(cell, labels, n_time_steps=28, lr= 0.002):
+    """Build a model using the lstm cell.
+    A helper function to build the conputation graph over time (unrolling) steps using the lstm cell.
+    Args:
+        cell (obj: `Cell`): a single lstm cell object
+        labels: labels in the training set
+        lr: learning rate
+    """
     losses = []
     for i in range(n_time_steps):
         _, logits = cell.forward_pass()
